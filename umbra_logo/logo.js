@@ -20,13 +20,13 @@ function rnd(seed) { let s = (seed >>> 0) || 1; return () => { s ^= s << 13; s ^
 function mk(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; }
 
 // ───────── timeline ─────────
-const TL = { bgIn: 0.5, swash0: 0.22, swash1: 0.7, write0: 0.48, write1: 1.86, fly: 1.86, impact: 2.0, sweep0: 2.35, sweep1: 2.9, flick: 3.16, glitch0: 3.62, glitch1: 4.12 };
+const TL = { bgIn: 0.5, swash0: 0.22, swash1: 0.7, write0: 0.48, write1: 1.86, g01: 1.62, impact: 2.0, sweep0: 2.35, sweep1: 2.9, flick: 3.16, glitch0: 3.62, glitch1: 4.12 };
 const WRITE_DUR = TL.write1 - TL.write0;
 const writeT = t => { const k = clamp((t - TL.write0) / WRITE_DUR); return k < 0.08 ? 0.5 * k * k / 0.08 : k > 0.92 ? 1 - 0.5 * (1 - k) * (1 - k) / 0.08 : k; };
 
 // ───────── layout ─────────
 const TX0 = 82, TY0 = 690;              // top-left of the "Umbra" time map
-const O1 = { x: 838, y: 1112, rot: -0.12, size: 168 };
+const O1 = { x: 830, y: 1112, rot: -0.1, size: 196 };
 const FLOOR = 1235;                     // reflection line
 
 // ───────── assets (filled in by init) ─────────
@@ -97,7 +97,7 @@ const SWASH_TMP = mk(1080, 520), SWX = SWASH_TMP.getContext('2d');
 const SPLAT = (() => { const R = rnd(91), a = []; for (let i = 0; i < 34; i++) { const ang = R() * TAU, d = 60 + Math.pow(R(), 0.7) * 380, side = R() < 0.5 ? 120 : 960; a.push({ x: side + Math.cos(ang) * d * 0.6, y: 900 + Math.sin(ang) * d * 0.45, r: 2 + Math.pow(R(), 3) * 9, ang, el: 1 + R() * 2.5, del: R() * 0.07, col: R() < 0.6 ? '#b45cff' : '#ff5ad2' }); } return a; })();
 
 async function init() {
-  await document.fonts.load('900 100px Orb', '01');
+  await document.fonts.load('700 100px Chakra', '01#$');
   PATH = await (await fetch('data/path.json')).json();
   const img = new Image(); img.src = 'data/timemap.png'; await img.decode();
   TW = img.width; TH = img.height;
@@ -216,20 +216,52 @@ function drips(t) {
   }
   ctx.restore();
 }
-function drawZeroOne(t, alpha = 1, forReflection = false) {
-  if (t < TL.fly) return;
-  const k = clamp((t - TL.fly) / (TL.impact - TL.fly)), land = t - TL.impact;
-  let sc = lerp(3.2, 1, eIn(k)); if (land > 0) sc = 1 - 0.07 * Math.exp(-land * 18) * Math.cos(land * 40);
-  const a = alpha * (k < 1 ? k * 0.9 : 1);
-  ctx.save(); ctx.translate(O1.x, O1.y); ctx.rotate(O1.rot); ctx.scale(sc, sc);
-  ctx.font = `900 ${O1.size}px Orb`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.letterSpacing = '6px';
-  if (!forReflection && k < 1) for (let i = 1; i <= 4; i++) { ctx.globalAlpha = a * 0.15; ctx.fillStyle = '#ff5ad2'; ctx.fillText('01', 0, i * 14 * (1 - k)); }
-  ctx.globalAlpha = a * 0.55; ctx.fillStyle = '#59d6ff'; ctx.fillText('01', -5, 3);         // chromatic offset accent
-  ctx.shadowColor = 'rgba(255,60,200,1)'; ctx.shadowBlur = forReflection ? 10 : 45;
-  const g = ctx.createLinearGradient(0, -O1.size / 2, 0, O1.size / 2); g.addColorStop(0, '#ffffff'); g.addColorStop(1, '#ff9ae6');
-  ctx.globalAlpha = a; ctx.fillStyle = g; ctx.fillText('01', 0, 0);
-  ctx.shadowBlur = 0; ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(255,255,255,0.6)'; ctx.strokeText('01', 0, 0);
-  ctx.restore();
+// ── "01": glitch decode → BANG → residual ripple ──
+const O1W = 560, O1H = 300, O1C = mk(O1W, O1H), O1X = O1C.getContext('2d'), O1T = mk(O1W, O1H), O1TX = O1T.getContext('2d');
+const SCR = '01ABCDEFHKMNPRSTUVXYZ#$%&@*/<>[]=+?!7394';
+function glyphs01(t) {
+  if (t >= TL.impact) return '01';
+  const step = Math.floor(t * 24), lock = [TL.impact - 0.09, TL.impact];
+  return [0, 1].map(i => t >= lock[i] ? '01'[i] : hash(step * 7.3 + i * 13) < 0.22 ? '01'[i] : SCR[Math.floor(hash(step * 3.1 + i * 5.7) * SCR.length)]).join('');
+}
+function paint01(str, glow, scan) {
+  O1X.setTransform(1, 0, 0, 1, 0, 0); O1X.globalCompositeOperation = 'source-over'; O1X.globalAlpha = 1; O1X.clearRect(0, 0, O1W, O1H);
+  O1X.font = `700 ${O1.size}px Chakra`; O1X.textAlign = 'center'; O1X.textBaseline = 'middle'; O1X.letterSpacing = '12px';
+  O1X.shadowColor = 'rgba(255,60,200,1)'; O1X.shadowBlur = 42 * glow;
+  const g = O1X.createLinearGradient(0, O1H / 2 - O1.size / 2, 0, O1H / 2 + O1.size / 2); g.addColorStop(0, '#ffffff'); g.addColorStop(1, '#ff9ae6');
+  O1X.fillStyle = g; O1X.fillText(str, O1W / 2, O1H / 2);
+  O1X.shadowBlur = 0; O1X.lineWidth = 2; O1X.strokeStyle = 'rgba(255,255,255,0.7)'; O1X.strokeText(str, O1W / 2, O1H / 2);
+  if (scan > 0.02) { O1X.globalCompositeOperation = 'destination-out'; O1X.fillStyle = `rgba(0,0,0,${0.55 * scan})`; for (let y = 0; y < O1H; y += 4) O1X.fillRect(0, y, O1W, 1.6); }
+}
+function tint(col) { O1TX.globalCompositeOperation = 'copy'; O1TX.drawImage(O1C, 0, 0); O1TX.globalCompositeOperation = 'source-in'; O1TX.fillStyle = col; O1TX.fillRect(0, 0, O1W, O1H); return O1T; }
+function state01(t) {
+  if (t < TL.g01) return null;
+  const ia = t - TL.impact, step = Math.floor(t * 30);
+  if (ia < 0) { // decoding: flicker, scramble, heavy RGB split and slices
+    const k = (t - TL.g01) / (TL.impact - TL.g01), on = hash(step * 1.37) < 0.3 + 0.6 * k;
+    return { str: glyphs01(t), alpha: on ? 0.5 + 0.5 * hash(step * 2.1) : 0.07, rgb: 10 + 28 * hash(step * 4.3), slices: 1.1 - 0.4 * k, ripple: 4, sx: 1 + (hash(step * 5.9) - 0.5) * 0.6 * (1 - k), glow: 0.55, scan: 1, step };
+  }
+  const micro = ia > 0.6 && (t * 1.25) % 1 < 0.07 ? 1 : 0; // a tiny glitch every 0.8 s
+  return { str: '01', alpha: 1, rgb: 16 * Math.exp(-ia * 8) + 1.6 + micro * 9, slices: (ia < 0.1 ? 0.9 : 0) + micro * 0.5, ripple: 12 * Math.exp(-ia * 3.2) + 1.1, sx: 1 + 0.14 * Math.exp(-ia * 22), glow: 1, scan: 0.8 * Math.exp(-ia * 3) + 0.12, step };
+}
+function drawZeroOne(t, alpha = 1, refl = false) {
+  const S = state01(t); if (!S) return;
+  paint01(S.str, S.glow * (refl ? 0.3 : 1), refl ? 0 : S.scan);
+  ctx.save(); ctx.translate(O1.x, O1.y); ctx.rotate(O1.rot); ctx.scale(S.sx, 1 / Math.sqrt(S.sx));
+  const a = alpha * S.alpha;
+  if (!refl && S.rgb > 0.5) {
+    ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = a * 0.75;
+    ctx.drawImage(tint('#2fd8ff'), -O1W / 2 - S.rgb, -O1H / 2);
+    ctx.drawImage(tint('#ff2fb4'), -O1W / 2 + S.rgb, -O1H / 2 + S.rgb * 0.15);
+    ctx.globalCompositeOperation = 'source-over';
+  }
+  ctx.globalAlpha = a; const sh = 5;
+  for (let y = 0; y < O1H; y += sh) { // strips: ripple wave + glitch slice offsets
+    let dx = S.ripple * Math.sin(y * 0.085 + t * 24);
+    if (S.slices > 0 && hash(S.step * 11.7 + Math.floor(y / 15) * 0.37) < 0.2 * S.slices) dx += (hash(S.step * 3.3 + Math.floor(y / 15)) - 0.5) * 130 * S.slices;
+    ctx.drawImage(O1C, 0, y, O1W, sh, -O1W / 2 + dx, -O1H / 2 + y, O1W, sh);
+  }
+  ctx.restore(); ctx.globalAlpha = 1;
 }
 function impactFX(t) {
   const age = t - TL.impact; if (age < 0) return;
@@ -247,9 +279,9 @@ function impactFX(t) {
       const a = 1 - age / life; ctx.strokeStyle = `rgba(255,${180 + 70 * hash(i)},255,${a})`; ctx.lineWidth = 2.5;
       ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - Math.cos(ang) * v * 0.03, y - Math.sin(ang) * v * 0.021); ctx.stroke();
     }
-    for (const [d, w, c] of [[0, 14, '255,100,220'], [0.06, 6, '170,100,255']]) { // shockwaves
-      const k = eOut((age - d) / 0.6); if (k <= 0 || k >= 1) continue;
-      ctx.strokeStyle = `rgba(${c},${1 - k})`; ctx.lineWidth = w * (1 - k) + 1; ctx.beginPath(); ctx.ellipse(O1.x, O1.y, 620 * k, 240 * k, O1.rot, 0, TAU); ctx.stroke();
+    for (const [d, w, c] of [[0, 12, '255,100,220'], [0.05, 5, '170,100,255']]) { // shockwaves (start outside the digits)
+      const k = lerp(0.45, 1, eOut((age - d) / 0.55)); if (age < d || k >= 0.999) continue;
+      ctx.strokeStyle = `rgba(${c},${(1 - k) * 1.6})`; ctx.lineWidth = w * (1 - k) + 1; ctx.beginPath(); ctx.ellipse(O1.x, O1.y, 620 * k, 240 * k, O1.rot, 0, TAU); ctx.stroke();
     }
     spr(SPR.white, O1.x, O1.y, 300, Math.exp(-age * 10)); spr(SPR.pink, O1.x, O1.y, 700, 0.6 * Math.exp(-age * 5));
   }
@@ -259,7 +291,7 @@ function sweep(t) { // specular light sweep across the logo
   const k = (t - TL.sweep0) / (TL.sweep1 - TL.sweep0); if (k <= 0 || k >= 1) return;
   BX.setTransform(1, 0, 0, 1, 0, 0); BX.globalCompositeOperation = 'copy'; BX.globalAlpha = 1;
   BX.drawImage(TXC, TX0, TY0);
-  BX.globalCompositeOperation = 'source-over'; BX.save(); BX.translate(O1.x, O1.y); BX.rotate(O1.rot); BX.font = `900 ${O1.size}px Orb`; BX.textAlign = 'center'; BX.textBaseline = 'middle'; BX.letterSpacing = '6px'; BX.fillStyle = '#fff'; BX.fillText('01', 0, 0); BX.restore();
+  BX.globalCompositeOperation = 'source-over'; paint01('01', 0, 0); BX.save(); BX.translate(O1.x, O1.y); BX.rotate(O1.rot); BX.drawImage(O1C, -O1W / 2, -O1H / 2); BX.restore();
   BX.globalCompositeOperation = 'source-in';
   const x = lerp(-300, W + 300, eIO(k)), g = BX.createLinearGradient(x - 160, 0, x + 160, 300);
   g.addColorStop(0, 'rgba(255,255,255,0)'); g.addColorStop(0.5, 'rgba(255,255,255,0.95)'); g.addColorStop(1, 'rgba(255,255,255,0)');
@@ -313,6 +345,7 @@ window.renderFrame = function (t) {
   let split = ia > 0 ? 18 * Math.exp(-ia * 10) : 0, gl = 0;
   if (V === 'intro' && t > TL.glitch0) { const k = (t - TL.glitch0) / (TL.glitch1 - TL.glitch0); split += 30 * k; gl = clamp(k * 1.4); }
   if (t > TL.flick && t < TL.flick + 0.06) gl = Math.max(gl, 0.3);
+  if (ia > 0 && ia < 0.1) gl = Math.max(gl, 0.55);  // the BANG glitches the whole logo for a few frames
   rgbSplit(split); glitchSlices(t, gl);
   if (V === 'intro' && t > TL.glitch1 - 0.18) { // CRT switch-off
     const k = clamp((t - (TL.glitch1 - 0.18)) / 0.18);

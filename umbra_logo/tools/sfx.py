@@ -41,8 +41,18 @@ for i in range(26):
     add(np.sin(2 * np.pi * f * t) * e * 0.05, pan=-0.8 + 1.6 * i / 26)
 # pre-impact reverse whoosh + impact (sub drop, transient, noise burst) + reverb tail
 imp = 2.0
-pre = hp(noise, 800) * np.clip((t - 1.8) / 0.2, 0, 1) ** 3 * (t < imp) * 0.5
-add(pre, 0.4)
+# glitch decode of "01" (1.62–2.0): bit-crushed crackle + random digital blips, one per scramble step
+g0 = 1.62; gk = np.clip((t - g0) / (imp - g0), 0, 1) * (t >= g0) * (t < imp)
+step = np.floor(t * 30); gate = (np.sin(step * 12.9898) * 43758.5453 % 1) < 0.35 + 0.6 * gk
+crackle = np.round(hp(noise, 1500) * 3) / 3 * gate * gk * 0.28
+blip_f = 600 + 2400 * (np.sin(np.floor(t * 24) * 78.233) * 43758.5453 % 1)
+blips = np.sign(np.sin(2 * np.pi * np.cumsum(blip_f) / SR)) * gate * gk * 0.06
+add(lp(crackle + blips, 9000), 0.35)
+# tiny glitch ticks after the hit (every 0.8 s, matches the visual micro-glitch)
+for tk in np.arange(0.8, DUR, 0.8):
+    if tk - imp > 0.6:
+        e = ((t >= tk) & (t < tk + 0.07)).astype(float)
+        add(np.round(hp(noise, 2500) * 2) / 2 * e * 0.07, 0.3)
 ti = np.clip(t - imp, 0, None); on = (t >= imp)
 sub = np.sin(2 * np.pi * np.cumsum(np.where(on, 38 + 52 * np.exp(-ti * 9), 0)) / SR) * np.exp(-ti * 2.6) * on * 0.9
 click = hp(noise, 2000) * np.exp(-ti * 70) * on * 0.6
