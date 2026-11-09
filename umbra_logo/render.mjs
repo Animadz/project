@@ -18,7 +18,7 @@ const server = http.createServer((req, res) => {
   res.writeHead(200, { 'content-type': MIME[path.extname(p)] || 'application/octet-stream' }); fs.createReadStream(p).pipe(res);
 });
 await new Promise(r => server.listen(0, r));
-const URL = `http://127.0.0.1:${server.address().port}/index.html?v=${args.v || 'intro'}`;
+const URL = `http://127.0.0.1:${server.address().port}/index.html?v=${args.v || 'intro'}&c=${args.c || 0}`;
 const browser = await chromium.launch();
 async function newPage() {
   const page = await browser.newPage({ viewport: { width: 540, height: 960 } });

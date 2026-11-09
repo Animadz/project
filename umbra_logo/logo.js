@@ -320,13 +320,13 @@ function glitchSlices(t, amt) {
 }
 
 // ───────── frame ─────────
-window.renderFrame = function (t) {
+function renderLogo(t, hook, noFade) {
   ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over'; ctx.filter = 'none'; ctx.shadowBlur = 0;
   ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
   const ia = t - TL.impact, shake = ia > 0 ? 22 * Math.exp(-ia * 9) : 0;
   const zoom = 1 + 0.05 * eIO(t / DUR) + (ia > 0 ? 0.03 * Math.exp(-ia * 7) : 0);
   ctx.save(); ctx.translate(W / 2 + noise1(t * 40) * shake, H / 2 + noise1(t * 37 + 9) * shake); ctx.scale(zoom, zoom); ctx.translate(-W / 2, -H / 2);
-  background(t);
+  background(t); if (hook) hook();
   swash(t);
   const T = writeT(t);
   let flick = 1; if (t > TL.flick && t < TL.flick + 0.05) flick = 0.35; else if (t > TL.flick + 0.1 && t < TL.flick + 0.13) flick = 0.55;
@@ -358,9 +358,11 @@ window.renderFrame = function (t) {
   ctx.globalCompositeOperation = 'overlay'; ctx.globalAlpha = 0.06; ctx.fillStyle = GRAIN[Math.floor(t * 30) % 3];
   ctx.save(); ctx.translate(Math.floor(hash(Math.floor(t * 30)) * 256), 0); ctx.fillRect(-256, 0, W + 512, H); ctx.restore();
   ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
-  const fade = Math.max(1 - ss(0, TL.bgIn, t), V === 'intro' ? ss(TL.glitch1, DUR, t) : ss(5.25, 6.0, t));
+  const fade = Math.max(noFade ? 0 : 1 - ss(0, TL.bgIn, t), V === 'intro' ? ss(TL.glitch1, DUR, t) : ss(5.25, 6.0, t));
   if (fade > 0) { ctx.fillStyle = `rgba(0,0,0,${fade})`; ctx.fillRect(0, 0, W, H); }
 };
+window.renderFrame = t => renderLogo(t);
 window.DURATION = DUR; window.FPS = 60;
+window.LOGO = { renderLogo, background, rgbSplit, glitchSlices, SWASH, SPR, spr, hash, noise1, clamp, lerp, ss, eOut, eIn, eIO, mk, ctx, cv, W, H, TL, VIGN, GRAIN, DUR, V };
 window.ready = init();
 })();
